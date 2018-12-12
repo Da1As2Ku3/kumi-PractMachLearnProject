@@ -1,0 +1,134 @@
+---
+title: "Practical Machine Learning Project - Predict the manner in which people exercise"
+author: "David Asare Kumi"
+date: "December 12, 2018"
+output: html_document
+---
+
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har and let me add that they have been extremely generous for allowing their data to be used for this purpose.
+
+
+##Selecting the right model
+
+It's obvious that this project dwells more on classification. Most of the models like bagging,boosting,rpart,lda,naive Bayes' and random forests are all suitable for this project but I prefer random forests because of its superior advantage of accuracy even though it's slow and difficult to interpret.
+Rpart method is also considered to help in model selection. 
+
+
+##Methodology
+
+To reproduce the same result, set a seed for each of the analysis to be caried out. The training data set provided was partitioned into a 70% and a 30%. The 70% is for the intratraining data set and the 30% is for the intratesting data set. Models fit for each analysis are applied to the intratesting data set.
+
+
+##Executive Summary
+This project was executed considering two models namely Rpart and Random Forests.
+
+The final value used for the rpart model was cp=0.03186349 with a corresponding accuracy of 0.5101218 which is approximately 51%. This is not good so I employed the random forest model for a better accuracy level.
+
+The final model generated for the random forests model was mtry=7 with a corresponding accuracy of 0.9864597 which is approximately 98.6% and this is pretty good.
+The out of sample error is about 0.0135403 which is approximately 1.4%.
+A 10 fold cross validation was done in this analysis.
+
+##Loading and processing the data
+
+``` {r dataloadingandprocessing,echo=TRUE}
+library(data.table)
+library(caret)
+library(ggplot2)
+library(dplyr)
+
+fileUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl,destfile=paste0("/Users/kumi/Desktop/PractMachLearnProject",'pml-training.csv'))
+
+#Read csv data
+path <-getwd()
+trainDT <-data.table::fread("/Users/kumi/Desktop/PractMachLearnProjectpml-training.csv")
+dim(trainDT)
+mean(is.na(trainDT))
+
+fileUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl,destfile=paste0("/Users/kumi/Desktop/PractMachLearnProject",'pml-testing.csv'))
+
+#Read csv data
+path <-getwd()
+testDT <-data.table::fread("/Users/kumi/Desktop/PractMachLearnProjectpml-testing.csv")
+dim(testDT)
+mean(is.na(testDT))
+
+```
+
+###Select relevant variables and clean the data
+
+The parameters below were selected as the suitable variables for this analysis since most of the remaining parameters contains several NAs and some have values near zero.
+
+
+``` {r selectvariables,echo=TRUE}
+trainDT.S <-select(trainDT,roll_belt, pitch_belt, yaw_belt, roll_arm, pitch_arm, yaw_arm, roll_forearm, pitch_forearm, yaw_forearm, roll_dumbbell, pitch_dumbbell, yaw_dumbbell,classe)
+dim(trainDT.S)
+testDT.S <-select(testDT,roll_belt, pitch_belt, yaw_belt, roll_arm, pitch_arm, yaw_arm, roll_forearm, pitch_forearm, yaw_forearm, roll_dumbbell, pitch_dumbbell, yaw_dumbbell)
+dim(testDT.S)
+
+```
+
+##Data Analysis
+###Rpart
+
+``` {r dataAnalysis,echo=TRUE}
+library(caret)
+library(rpart)
+set.seed(12345)
+inTrain <-createDataPartition(y=trainDT.S$classe,p=0.7,list=FALSE)
+intratraining <-trainDT.S[inTrain,]
+intratesting <-trainDT.S[-inTrain,]
+dim(intratraining)
+dim(intratesting)
+modFit <-train(classe~.,method="rpart",data=intratraining)
+modFit
+finMod <-modFit$finalModel
+finMod
+plot(modFit$finalModel,uniform=TRUE,main="Classification Tree")
+text(modFit$finalModel,use.n=TRUE,all=TRUE,cex=0.8)
+
+```
+
+The final value used for the model was cp=0.03186349 with a corresponding accuracy of 0.5101218 which is approximately 51%. This is not good so I employed the random forest model for a better accuracy level.
+
+###Random Forests
+
+``` {r echo=TRUE}
+library(randomForest)
+library(caret)
+library(ggplot2)
+set.seed(12345)
+inTrain <-createDataPartition(y=trainDT.S$classe,p=0.7,list=FALSE)
+intratraining <-trainDT.S[inTrain,]
+intratesting <-trainDT.S[-inTrain,]
+modFitRF <-train(classe~.,method="rf",data=intratraining,trControl=trainControl(method="cv"),number=3)
+modFitRF
+finMod <-modFit$finalMOdel
+predRF <-predict(modFitRF,intratesting)
+intratesting$predRight <-predRF==intratesting$classe
+table(predRF,intratesting$classe)
+qplot(predRF,classe,data=intratesting,main="Scatterplot of predRF and classe")
+
+```
+
+The final model generated for the random forests model was mtry=7 with a corresponding accuracy of 0.9864597 which is approximately 98.6% and this is pretty good.
+The out of sample error is about 0.0135403 which is approximately 1.4%.
+A 10 fold cross validation was considered in this analysis.
+
+##Prediction of Test Data
+
+``` {r testprediction,echo=TRUE}
+testDT.S <-select(testDT,roll_belt, pitch_belt, yaw_belt, roll_arm, pitch_arm, yaw_arm, roll_forearm, pitch_forearm, yaw_forearm, roll_dumbbell, pitch_dumbbell, yaw_dumbbell)
+testDT.S
+
+#Employ random forests to predict test data
+predRF <-predict(modFitRF,testDT.S,type="raw")
+predRF
+
+```
